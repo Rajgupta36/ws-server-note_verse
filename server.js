@@ -1,7 +1,8 @@
 const WebSocket = require('ws');
 const { setupWSConnection } = require('y-websocket/bin/utils');
 
-const wss = new WebSocket.Server({ port: 1234 });
+const PORT = process.env.PORT || 1234;
+const wss = new WebSocket.Server({ port: PORT });
 
 const clients = new Map(); // Stores clients for each document
 const documents = new Map(); // Stores document metadata
@@ -232,5 +233,4 @@ wss.on('connection', (ws, req) => {
     setupWSConnection(ws, req, { gc: true });
 });
 
-const PORT = process.env.PORT || 1234;
 console.log(`WebSocket server is running on port ${PORT}`);
