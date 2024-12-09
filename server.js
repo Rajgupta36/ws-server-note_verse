@@ -56,7 +56,41 @@ wss.on('connection', (ws, req) => {
 
     ws.on('close', () => {
         console.log('Client disconnected');
-        cleanupClient(ws);
+
+        // Remove the client from the clients map
+        for (const [documentId, clientSet] of clients.entries()) {
+            if (clientSet.has(ws)) {
+                clientSet.delete(ws);
+                if (clientSet.size === 0) {
+                    clients.delete(documentId);
+                }
+                break;
+            }
+        }
+
+        // Handle document owner disconnection
+        for (const [documentId, document] of documents.entries()) {
+            if (document.ownerconnection === ws) {
+                console.log(`Owner disconnected for document ${documentId}`);
+
+                // Notify and disconnect all collaborators
+                const collaborators = clients.get(documentId) || new Set();
+                collaborators.forEach((collaboratorWs) => {
+                    collaboratorWs.send(
+                        JSON.stringify({
+                            type: 'ERROR',
+                            message: `The owner of the document  has disconnected. You have been removed from the session.`,
+                        })
+                    );
+                    collaboratorWs.close();
+                });
+
+                // Clean up
+                clients.delete(documentId);
+                documents.delete(documentId);
+                break;
+            }
+        }
     });
 });
 
