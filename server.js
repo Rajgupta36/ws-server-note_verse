@@ -2,7 +2,10 @@ const WebSocket = require('ws');
 const { setupWSConnection } = require('y-websocket/bin/utils');
 
 const PORT = process.env.PORT || 1234;
-const wss = new WebSocket.Server({ port: PORT });
+const wss = new WebSocket.Server({
+    port: PORT,
+    host: '0.0.0.0', // Bind to all network interfaces (publicly accessible)
+});
 
 const clients = new Map(); // Stores clients for each document
 const documents = new Map(); // Stores document metadata
