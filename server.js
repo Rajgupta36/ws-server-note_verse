@@ -1,30 +1,41 @@
+const http = require('http');
 const WebSocket = require('ws');
 const { setupWSConnection } = require('y-websocket/bin/utils');
 
 const PORT = process.env.PORT || 1234;
-const wss = new WebSocket.Server({
-    port: PORT,
-    host: '0.0.0.0', // Bind to all network interfaces (publicly accessible)
+
+// Create an HTTP server
+const server = http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('WebSocket server is running');
 });
 
-const clients = new Map(); // Stores clients for each document
-const documents = new Map(); // Stores document metadata
+// Attach WebSocket server to the HTTP server
+const wss = new WebSocket.Server({ server });
 
-wss.on('connection', (ws) => {
-    console.log('New client connected');
+// Map to store document data
+const clients = new Map();
+const documents = new Map();
 
-    // Handle incoming messages from the client
+// WebSocket connection handling
+wss.on('connection', (ws, req) => {
+    console.log('New WebSocket connection established');
+
+    // Integrate y-websocket connection setup
+    setupWSConnection(ws, req, { gc: true });
+
     ws.on('message', (message) => {
         let data;
         try {
-            data = JSON.parse(message); // Parse JSON
+            data = JSON.parse(message);
         } catch (error) {
-            console.log('Not a valid JSON message, skipping...');
-            return; // Ignore invalid JSON
+            console.log('Invalid JSON message received, skipping...');
+            return;
         }
 
-        console.log('Valid JSON received:', data);
+        console.log('Message received:', data);
 
+        // Handle different message types
         switch (data.type) {
             case 'JOIN_DOCUMENT':
                 handleJoinDocument(ws, data);
@@ -43,44 +54,9 @@ wss.on('connection', (ws) => {
         }
     });
 
-    // Handle client disconnection
     ws.on('close', () => {
         console.log('Client disconnected');
-
-        // Remove the client from the clients map
-        for (const [documentId, clientSet] of clients.entries()) {
-            if (clientSet.has(ws)) {
-                clientSet.delete(ws);
-                if (clientSet.size === 0) {
-                    clients.delete(documentId);
-                }
-                break;
-            }
-        }
-
-        // Handle document owner disconnection
-        for (const [documentId, document] of documents.entries()) {
-            if (document.ownerconnection === ws) {
-                console.log(`Owner disconnected for document ${documentId}`);
-
-                // Notify and disconnect all collaborators
-                const collaborators = clients.get(documentId) || new Set();
-                collaborators.forEach((collaboratorWs) => {
-                    collaboratorWs.send(
-                        JSON.stringify({
-                            type: 'ERROR',
-                            message: `The owner of the document  has disconnected. You have been removed from the session.`,
-                        })
-                    );
-                    collaboratorWs.close();
-                });
-
-                // Clean up
-                clients.delete(documentId);
-                documents.delete(documentId);
-                break;
-            }
-        }
+        cleanupClient(ws);
     });
 });
 
@@ -232,8 +208,6 @@ function handleDenyAccess(ws, data) {
         );
     }
 }
-wss.on('connection', (ws, req) => {
-    setupWSConnection(ws, req, { gc: true });
+server.listen(PORT, () => {
+    console.log(`Server is running on http://0.0.0.0:${PORT}`);
 });
-
-console.log(`WebSocket server is running on port ${PORT}`);
